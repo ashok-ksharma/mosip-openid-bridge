@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -13,11 +14,15 @@ import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSession;
 
+import io.mosip.kernel.core.util.StringUtils;
+import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
 import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
 import org.apache.http.conn.ssl.TrustStrategy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -83,6 +88,8 @@ public class BeanConfig {
 	
 	@Autowired(required = false)
 	private ReactorLoadBalancerExchangeFilterFunction lbFilterFunction;
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(BeanConfig.class);
 
 	@SuppressWarnings("java:S5527") // added suppress for sonarcloud. 
 	// Server hostname verification is not required because of 2 reasons:
@@ -177,7 +184,15 @@ public class BeanConfig {
 		HttpClientBuilder httpClientBuilder = HttpClients.custom()
 				.setConnectionManager(connectionManager)
 				.disableCookieManagement();
-		
+
+		//Setting socket timeout for the registration processor stages
+		String socketTimeout = environment.getProperty("registration.processor.socket.timeout");
+		if(StringUtils.isNotEmpty(socketTimeout)) {
+			LOGGER.info("Setting response timeout for the registration processor : {}", socketTimeout);
+			RequestConfig config = RequestConfig.custom().setResponseTimeout(Long.parseLong(socketTimeout), TimeUnit.MILLISECONDS).build();
+			httpClientBuilder.setDefaultRequestConfig(config);
+		}
+
 		String applName = getApplicationName();
 		HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory();
 		requestFactory.setHttpClient(httpClientBuilder.build());
